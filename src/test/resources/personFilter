@@ -1,0 +1,16 @@
+{"regions":
+    [
+        {
+            "region":"03",
+            "municipals":[]
+        },
+        {
+            "region":"11",
+            "municipals":["1101","1102"]
+        },
+        {
+            "region":"54",
+            "municipals":["5401"]
+        }
+    ]
+}
