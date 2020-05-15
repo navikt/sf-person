@@ -51,10 +51,10 @@ tasks.withType(JavaExec) {
 
 run {
     environment "KAFKA_BROKERS", "localhost:9092"
-    environment "KAFKA_CLIENTID", "sf-permiteringsvarsel"
+    environment "KAFKA_CLIENTID", "sf-person"
     environment "KAFKA_SECURITY", "FALSE"
-    environment "KAFKA_TOPIC", "aapen-permittering-arbeidsgiver"
-    environment "SF_INSTTYPE", "PREPROD"
+    environment "KAFKA_TOPIC", "privat-sf-person-local"
+    environment "SF_INSTTYPE", "SCRATCH"
     environment "MS_BETWEEN_WORK", "60000"
 }
 
