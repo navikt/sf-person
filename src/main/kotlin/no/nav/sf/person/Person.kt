@@ -8,7 +8,7 @@ private val log = KotlinLogging.logger { }
 
 @Serializable
 internal data class PersonKey(val aktoer_id: String, val tombstone: Boolean) {
-    fun toJson(): String = json.stringify(serializer(), this)
+    fun toJson(): String = no.nav.sf.library.json.stringify(serializer(), this)
 }
 
 internal sealed class PersonBase {
@@ -56,61 +56,6 @@ internal data class Person(
     val region: String,
     val doed: Boolean
 ) : PersonBase() {
-    fun toJson(): String = json.stringify(serializer(), this)
+    fun toJson(): String = no.nav.sf.library.json.stringify(serializer(), this)
     fun toPersonKey(): PersonKey = PersonKey(this.aktoer_id, false)
 }
-
-internal fun List<Person>.applyFilter(f: FilterPersonBase): List<Person> = when (f) {
-    is FilterPersonInvalid -> emptyList()
-    is FilterPerson -> {
-        this.filter { p ->
-            val rfIndex: Int = f.hasRegion(p.region)
-            when (val rf = if (rfIndex == -1) RegionMissing else f.regions[rfIndex]) {
-                is RegionMissing -> false
-                is Region -> {
-                    when {
-                        rf.municipals.isNotEmpty() -> rf.municipals.contains(p.kommunenummer) && !p.doed
-                        else -> !p.doed
-                    }
-                }
-            }
-        }
-    }
-}
-
-sealed class FilterPersonBase
-object FilterPersonInvalid : FilterPersonBase()
-
-@Serializable
-internal data class FilterPerson(
-    val regions: List<Region>
-) : FilterPersonBase() {
-
-    companion object {
-        fun fromJson(data: String): FilterPersonBase = runCatching { json.parse(serializer(), data) }
-                .onFailure {
-                    ServerState.flag(ServerStates.FilterPersonIssues)
-                    log.error { "Parsing of person filter in vault failed - ${it.localizedMessage}" }
-                }
-                .getOrDefault(FilterPersonInvalid)
-    }
-
-    fun hasRegion(r: String): Int = regions.map { it.region }.indexOf(r)
-}
-
-/**
- * See protobuf schema as reference
- * Only LIVING persons in listed regions and related municipals will be transferred to Salesforce
- * iff empty list of municipal  - all living persons in that region
- * iff non-empty municipals - only living person in given region AND municipals will be transferred
- *
- */
-
-sealed class RegionBase
-object RegionMissing : RegionBase()
-
-@Serializable
-internal data class Region(
-    val region: String,
-    val municipals: List<String> = emptyList()
-) : RegionBase()

@@ -1,95 +1,121 @@
 package no.nav.sf.person
 
+import io.prometheus.client.Gauge
 import mu.KotlinLogging
+import no.nav.sf.library.AKafkaConsumer
+import no.nav.sf.library.KafkaConsumerStates
+import no.nav.sf.library.KafkaMessage
+import no.nav.sf.library.SFsObjectRest
+import no.nav.sf.library.SalesforceClient
+import no.nav.sf.library.encodeB64
+import no.nav.sf.library.isSuccess
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 
 private val log = KotlinLogging.logger {}
 
-internal fun work(p: Params): AuthorizationBase {
+sealed class ExitReason {
+    object NoSFClient : ExitReason()
+    object NoKafkaClient : ExitReason()
+    object NoEvents : ExitReason()
+    object Work : ExitReason()
+}
+
+data class WorkSettings(
+    val kafkaConfig: Map<String, Any> = AKafkaConsumer.configBase + mapOf<String, Any>(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG to ByteArrayDeserializer::class.java,
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG to ByteArrayDeserializer::class.java
+    ),
+    val sfClient: SalesforceClient = SalesforceClient()
+)
+
+// some work metrics
+data class WMetrics(
+    val noOfConsumedEvents: Gauge = Gauge
+            .build()
+            .name("kafka_consumed_event_gauge")
+            .help("No. of consumed activity events from kafka since last work session")
+            .register(),
+    val noOfPostedEvents: Gauge = Gauge
+            .build()
+            .name("sf_posted_event_gauge")
+            .help("No. of posted events to Salesforce since last work session")
+            .register()
+) {
+    fun clearAll() {
+        noOfConsumedEvents.clear()
+        noOfPostedEvents.clear()
+    }
+}
+
+val workMetrics = WMetrics()
+
+internal fun work(ws: WorkSettings): Pair<WorkSettings, ExitReason> {
 
     log.info { "bootstrap work session starting" }
+    workMetrics.clearAll()
 
-    return getSalesforceSObjectPostFun(p.getSalesforceDetails(), p.sfAuthorization) { sfPost ->
+    var exitReason: ExitReason = ExitReason.NoSFClient
 
-        val personFilterChanged = p.vault.personFilter != p.prevVault.personFilter
+    ws.sfClient.enablesObjectPost { postActivities ->
 
-        getKafkaConsumerByConfig<ByteArray, ByteArray>(
-                mapOf(
-                        ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG to p.envVar.kBrokers,
-                        ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG to ByteArrayDeserializer::class.java,
-                        ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG to ByteArrayDeserializer::class.java,
-                        ConsumerConfig.GROUP_ID_CONFIG to p.envVar.kClientID,
-                        ConsumerConfig.CLIENT_ID_CONFIG to p.envVar.kClientID,
-                        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG to "earliest",
-                        ConsumerConfig.MAX_POLL_RECORDS_CONFIG to 200, // Use of SF REST API
-                        ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG to "false"
-                ).let { cMap ->
-                    if (p.envVar.kSecurityEnabled)
-                        cMap.addKafkaSecurity(
-                                p.vault.kafkaUser,
-                                p.vault.kafkaPassword,
-                                p.envVar.kSecProt,
-                                p.envVar.kSaslMec
+        exitReason = ExitReason.NoKafkaClient
+        val kafkaConsumer = AKafkaConsumer<ByteArray, ByteArray>(
+                config = ws.kafkaConfig,
+                fromBeginning = false
+        )
+
+        kafkaConsumer.consume { consumerRecords ->
+
+            exitReason = ExitReason.NoEvents
+            if (consumerRecords.isEmpty) return@consume KafkaConsumerStates.IsFinished
+
+            exitReason = ExitReason.Work
+            workMetrics.noOfConsumedEvents.inc(consumerRecords.count().toDouble())
+
+            val pTypes = consumerRecords.map {
+                PersonBase.fromProto(it.key(), it.value()).also { pb ->
+                    if (pb is PersonProtobufIssue)
+                        log.error { "Protobuf parsing issue for offset ${it.offset()} in partition ${it.partition()}" }
+                }
+            }
+
+            if (pTypes.filterIsInstance<PersonProtobufIssue>().isNotEmpty()) {
+                log.error { "Protobuf issues - leaving kafka consumer loop" }
+                return@consume KafkaConsumerStates.HasIssues
+            }
+
+            val topic = kafkaConsumer.topics.first()
+            val tombstones = pTypes.filterIsInstance<PersonTombstone>()
+
+            val persons = pTypes.filterIsInstance<Person>()
+
+            val body = SFsObjectRest(
+                    records = tombstones.map {
+                        KafkaMessage(
+                                topic = topic,
+                                key = it.toPersonKey().toJson().encodeB64(),
+                                value = ""
                         )
-                    else cMap
-                },
-                p.getKafkaTopics().also {
-                    log.info { "Subscribing to topic ${p.getKafkaTopics()} with user ${p.vault.kafkaUser}" }
-                }, fromBeginning = personFilterChanged
-        ) { cRecords ->
-            if (!cRecords.isEmpty) {
-
-                val pTypes = cRecords.map {
-                    PersonBase.fromProto(it.key(), it.value()).also { pb ->
-                        if (pb is PersonProtobufIssue)
-                            log.error { "Protobuf parsing issue for offset ${it.offset()} in partition ${it.partition()}" }
+                    } + persons.map {
+                        KafkaMessage(
+                                topic = topic,
+                                key = it.toPersonKey().toJson().encodeB64(),
+                                value = it.toJson().encodeB64()
+                        )
                     }
+            ).toJson()
+
+            when (postActivities(body).isSuccess()) {
+                true -> {
+                    workMetrics.noOfPostedEvents.inc(consumerRecords.count().toDouble())
+                    KafkaConsumerStates.IsOk
                 }
-
-                if (pTypes.filterIsInstance<PersonProtobufIssue>().isNotEmpty()) {
-                    log.error { "Protobuf issues - leaving kafka consumer loop" }
-                    return@getKafkaConsumerByConfig ConsumerStates.HasIssues
-                }
-
-                val topic = p.getKafkaTopics().first()
-                val tombstones = pTypes.filterIsInstance<PersonTombstone>()
-                val persons = pTypes.filterIsInstance<Person>().applyFilter(p.vault.personFilter)
-
-                val body = SFsObjectRest(
-                        records = tombstones.map {
-                            KafkaMessage(
-                                    topic = topic,
-                                    key = it.toPersonKey().toJson().encodeB64(),
-                                    value = ""
-                            )
-                        } + persons.map {
-                            KafkaMessage(
-                                    topic = topic,
-                                    key = it.toPersonKey().toJson().encodeB64(),
-                                    value = it.toJson().encodeB64()
-                            )
-                        }
-                ).toJson()
-
-                val noOfPersons = tombstones.size + persons.size
-
-                if (sfPost(body)) {
-                    Metrics.sentPersons.inc(noOfPersons.toDouble())
-                    log.info { "Post of $noOfPersons person(s) to Salesforce" }
-
-                    // reset alarm metric
-                    if (ServerState.isOk()) Metrics.failedRequest.clear()
-
-                    ConsumerStates.IsOk
-                } else {
-                    log.error { "Couldn't post $noOfPersons persons(s) to Salesforce - leaving kafka consumer loop" }
-                    ConsumerStates.HasIssues
-                }
-            } else {
-                log.info { "Kafka events completed for now - leaving kafka consumer loop" }
-                ConsumerStates.IsFinished
+                false -> KafkaConsumerStates.HasIssues
             }
         }
     }
+    log.info { "bootstrap work session finished - $exitReason" }
+
+    return Pair(ws, exitReason)
 }

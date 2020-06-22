@@ -4,77 +4,61 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
+import no.nav.sf.library.AnEnvironment
+import no.nav.sf.library.PrestopHook
+import no.nav.sf.library.ShutdownHook
+import no.nav.sf.library.enableNAISAPI
+
+private const val EV_bootstrapWaitTime = "MS_BETWEEN_WORK" // default to 10 minutes
+private val bootstrapWaitTime = AnEnvironment.getEnvOrDefault(EV_bootstrapWaitTime, "60000").toLong()
 
 object Bootstrap {
 
     private val log = KotlinLogging.logger { }
 
-    fun start(ev: EnvVar = EnvVar()) {
+    fun start(ws: WorkSettings = WorkSettings()) {
         log.info { "Starting" }
-        ShutdownHook.reset()
-        enableNAISAPI {
-            ServerState.reset()
-            loop(Params(envVar = ev))
-        }
+        enableNAISAPI { loop(ws) }
         log.info { "Finished!" }
     }
 
-    private tailrec fun loop(p: Params) {
+    private tailrec fun loop(ws: WorkSettings) {
+        val stop = ShutdownHook.isActive() || PrestopHook.isActive()
+        when {
+            stop -> Unit
+            !stop -> loop(work(ws)
+                    .let { prevWS ->
+                        // re-read of vault entries in case of changes, keeping relevant access tokens and static env. vars.
+                        prevWS.first.copy(
+                                sfClient = prevWS.first.sfClient.copyRelevant()
+                        )
+                    }
+                    .also { conditionalWait() }
+            )
+        }
+    }
 
-        log.info { "Get parameters from dynamic vault and static env. variables" }
-        val newP = Params(
-                vault = Vault(),
-                prevVault = p.vault,
-                envVar = p.envVar,
-                sfAuthorization = p.sfAuthorization
-        )
+    private fun conditionalWait(ms: Long = bootstrapWaitTime) =
+            runBlocking {
 
-        val newAuthorization: AuthorizationBase = when (val i = p.integrityCheck()) {
-            is IntegrityIssue -> {
-                log.error { i.cause }
-                ServerState.flag(ServerStates.IntegrityIssues)
-                // flag need for attention
-                // TODO - fix misuse of metric giving alert on slack
-                Metrics.failedRequest.inc()
-                AuthorizationMissing
-            }
-            is IntegrityOk -> {
-                log.info { "Proxy details: ${p.envVar.httpsProxy}" }
+                log.info { "Will wait $ms ms before starting all over" }
 
-                // some resets before next attempt/work session
-                Metrics.sessionReset()
-
-                work(newP).also {
-                    if (!ShutdownHook.isActive() && ServerState.isOk()) conditionalWait(p.envVar.msBetweenWork)
+                val cr = launch {
+                    runCatching { delay(ms) }
+                            .onSuccess { log.info { "waiting completed" } }
+                            .onFailure { log.info { "waiting interrupted" } }
                 }
-            }
-        }
 
-        if (!ShutdownHook.isActive() && ServerState.isOk()) loop(
-                Params(envVar = newP.envVar, sfAuthorization = newAuthorization)
-        )
-    }
+                tailrec suspend fun loop(): Unit = when {
+                    cr.isCompleted -> Unit
+                    ShutdownHook.isActive() || PrestopHook.isActive() -> cr.cancel()
+                    else -> {
+                        delay(250L)
+                        loop()
+                    }
+                }
 
-    private fun conditionalWait(ms: Long) = runBlocking {
-
-        log.info { "Will wait $ms ms before starting all over" }
-
-        val cr = launch {
-            runCatching { delay(ms) }
-                    .onSuccess { log.info { "waiting completed" } }
-                    .onFailure { log.info { "waiting interrupted" } }
-        }
-
-        tailrec suspend fun loop(): Unit = when {
-            cr.isCompleted -> Unit
-            ServerState.preStopIsActive() || ShutdownHook.isActive() -> cr.cancel()
-            else -> {
-                delay(250L)
                 loop()
+                cr.join()
             }
-        }
-
-        loop()
-        cr.join()
-    }
 }

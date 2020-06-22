@@ -42,8 +42,6 @@ spec:
   env:
     - name: KAFKA_BROKERS
       value: SASL_SSL://a01apvl00145.adeo.no:8443,SASL_SSL://a01apvl00146.adeo.no:8443,SASL_SSL://a01apvl00147.adeo.no:8443,SASL_SSL://a01apvl00148.adeo.no:8443,SASL_SSL://a01apvl00149.adeo.no:8443,SASL_SSL://a01apvl00150.adeo.no:8443
-    - name: KAFKA_SCREG
-      value: https://kafka-schema-registry.nais.adeo.no
     - name: KAFKA_CLIENTID
       value: sf-person-v1
     - name: KAFKA_SECURITY
@@ -57,6 +55,10 @@ spec:
     - name: MS_BETWEEN_WORK
       value: '600000'
     - name: SF_INSTTYPE
-      value: 'PREPROD'
+      value: 'PRODUCTION'
     - name: SF_VERSION
       value: 'v48.0'
+    - name: SF_TOKENHOST
+      value: 'https://login.salesforce.com'
+    - name: VAULT_INSTANCE
+      value: PRODUCTION
