@@ -53,6 +53,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-wrapper-
       - name: Build JAR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GPR_READ }}
         run: ./gradlew clean build shadowJar -x test
       - name: Build and publish Docker image
         env:
