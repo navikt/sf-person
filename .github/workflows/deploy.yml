@@ -29,7 +29,7 @@ jobs:
             ${{ runner.os }}-gradle-wrapper-
       - name: Build and run tests
         env:
-          GITHUB_TOKEN: ${{ secrets.GPR_READ_SF_PERSON }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./gradlew clean build --info
   build:
     name: Build and push Docker container
@@ -59,7 +59,7 @@ jobs:
         run: ./gradlew clean build shadowJar -x test
       - name: Build and publish Docker image
         env:
-          GITHUB_TOKEN: ${{ secrets.GPR_READ_SF_PERSON }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           docker build . --pull --tag ${IMAGE}
           echo "$GITHUB_TOKEN" | docker login --username "$GITHUB_REPOSITORY" --password-stdin https://docker.pkg.github.com
