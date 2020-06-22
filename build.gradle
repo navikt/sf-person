@@ -40,8 +40,8 @@ jar {
 }
 
 shadowJar {
-    archiveBaseName = 'app'
-    archiveClassifier = ''
+    archiveBaseName.set('app')
+    archiveClassifier.set('')
 }
 
 application {
