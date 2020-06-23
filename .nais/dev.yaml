@@ -61,4 +61,4 @@ spec:
     - name: SF_VERSION
       value: 'v48.0'
     - name: VAULT_INSTANCE
-      value: PREPRODgit pull
+      value: PREPROD
