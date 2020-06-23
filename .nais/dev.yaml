@@ -54,8 +54,8 @@ spec:
       value: privat-sf-person-v1
     - name: MS_BETWEEN_WORK
       value: '600000'
-    - name: SF_INSTTYPE
-      value: 'PREPROD'
+    - name: SF_INSTANCE
+      value: PREPROD
     - name: SF_TOKENHOST
       value: 'https://test.salesforce.com'
     - name: SF_VERSION
