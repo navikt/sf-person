@@ -40,11 +40,23 @@ data class WMetrics(
             .build()
             .name("sf_posted_event_gauge")
             .help("No. of posted events to Salesforce since last work session")
+            .register(),
+    val consumerIssues: Gauge = Gauge
+            .build()
+            .name("consumer_issues")
+            .help("consumer issues")
+            .register(),
+    val producerIssues: Gauge = Gauge
+            .build()
+            .name("producer_issues")
+            .help("producer issues")
             .register()
 ) {
     fun clearAll() {
         noOfConsumedEvents.clear()
         noOfPostedEvents.clear()
+        consumerIssues.clear()
+        producerIssues.clear()
     }
 }
 
@@ -82,6 +94,7 @@ internal fun work(ws: WorkSettings): Pair<WorkSettings, ExitReason> {
 
             if (pTypes.filterIsInstance<PersonProtobufIssue>().isNotEmpty()) {
                 log.error { "Protobuf issues - leaving kafka consumer loop" }
+                workMetrics.consumerIssues.inc()
                 return@consume KafkaConsumerStates.HasIssues
             }
 
@@ -111,7 +124,10 @@ internal fun work(ws: WorkSettings): Pair<WorkSettings, ExitReason> {
                     workMetrics.noOfPostedEvents.inc(consumerRecords.count().toDouble())
                     KafkaConsumerStates.IsOk
                 }
-                false -> KafkaConsumerStates.HasIssues
+                false -> {
+                    workMetrics.producerIssues.inc()
+                    KafkaConsumerStates.HasIssues
+                }
             }
         }
     }
