@@ -18,6 +18,7 @@ Subscriber of kafka topic <tbd> and posts the events (new, updated, deleted) int
 ```
 
 ## Contact us
+[Björn Hägglund](mailto://bjorn.hagglund@nav.no)
 [Torstein Nesby](mailto://torstein.nesby@nav.no)
 
 For internal resources, send request/questions to slack #crm-plattform-team 
