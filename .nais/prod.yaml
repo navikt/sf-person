@@ -54,7 +54,7 @@ spec:
       value: privat-sf-person-v1
     - name: MS_BETWEEN_WORK
       value: '600000'
-    - name: SF_INSTTYPE
+    - name: SF_INSTANCE
       value: PRODUCTION
     - name: SF_TOKENHOST
       value: 'https://login.salesforce.com'
