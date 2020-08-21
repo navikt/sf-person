@@ -23,7 +23,7 @@ internal sealed class PersonBase {
                     runCatching {
                         PersonProto.PersonValue.parseFrom(value).let { v ->
                             Person(
-                                    aktoer_id = PersonProto.PersonKey.parseFrom(key).aktoerId,
+                                    aktoerId = PersonProto.PersonKey.parseFrom(key).aktoerId,
                                     identifikasjonsnummer = v.identifikasjonsnummer,
                                     fornavn = v.fornavn,
                                     mellomnavn = v.mellomnavn,
@@ -39,13 +39,13 @@ internal sealed class PersonBase {
     }
 }
 internal object PersonProtobufIssue : PersonBase()
-internal data class PersonTombstone(val aktoer_id: String) : PersonBase() {
-    fun toPersonKey(): PersonKey = PersonKey(this.aktoer_id, true)
+internal data class PersonTombstone(val aktoerId: String) : PersonBase() {
+    fun toPersonKey(): PersonKey = PersonKey(this.aktoerId, true)
 }
 
 @Serializable
 internal data class Person(
-    val aktoer_id: String,
+    val aktoerId: String,
     val identifikasjonsnummer: String,
     val fornavn: String,
     val mellomnavn: String,
@@ -57,5 +57,5 @@ internal data class Person(
     val doed: Boolean
 ) : PersonBase() {
     fun toJson(): String = no.nav.sf.library.json.stringify(serializer(), this)
-    fun toPersonKey(): PersonKey = PersonKey(this.aktoer_id, false)
+    fun toPersonKey(): PersonKey = PersonKey(this.aktoerId, false)
 }
