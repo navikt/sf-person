@@ -27,8 +27,8 @@ internal fun investigate(ws: WorkSettings) {
     workMetrics.noOfInvestigatedEvents.clear()
 
     kafkaConsumer.consume { consumerRecords ->
-
-        if (consumerRecords.isEmpty) return@consume KafkaConsumerStates.IsFinished
+        log.info { "Investigate Batch - start" }
+        if (consumerRecords.isEmpty) return@consume KafkaConsumerStates.IsFinished.also { log.info { "Investigate finished - no more messages" } }
 
         workMetrics.noOfInvestigatedEvents.inc(consumerRecords.count().toDouble())
 
@@ -68,6 +68,7 @@ internal fun investigate(ws: WorkSettings) {
             log.info { "Investigate - found target in key" }
         }
 
+        log.info { "Investigate Batch - end" }
         KafkaConsumerStates.IsOk
     }
 
