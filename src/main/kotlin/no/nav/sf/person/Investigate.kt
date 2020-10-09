@@ -33,6 +33,7 @@ internal fun investigate(ws: WorkSettings) {
         workMetrics.noOfInvestigatedEvents.inc(consumerRecords.count().toDouble())
 
         log.info { "Investigate batch start start map" }
+        log.info { "consumerRecords.first: ${consumerRecords.first()}" }
         val pTypes = consumerRecords.map {
             log.info { "record: k: ${it.key()?.size} v: ${it.value()?.size} " }
             PersonBase.fromProto(it.key(), it.value()).also { pb ->
