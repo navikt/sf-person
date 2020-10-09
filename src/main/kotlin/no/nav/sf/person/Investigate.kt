@@ -2,6 +2,7 @@ package no.nav.sf.person
 
 import java.io.File
 import mu.KotlinLogging
+import no.nav.pdlsf.proto.PersonProto
 import no.nav.sf.library.AKafkaConsumer
 import no.nav.sf.library.AnEnvironment
 import no.nav.sf.library.KafkaConsumerStates
@@ -27,25 +28,22 @@ internal fun investigate(ws: WorkSettings) {
 
     kafkaConsumer.consume { consumerRecords ->
 
-        if (consumerRecords.isEmpty) { return@consume KafkaConsumerStates.IsFinished.also { log.info { "Investigate finished - no more messages" } } }
+        if (consumerRecords.isEmpty) {
+            return@consume KafkaConsumerStates.IsFinished.also { log.info { "Investigate finished - no more messages" } }
+        }
 
-        log.info { "Investigate batch start - nO records ${consumerRecords.count()}" }
         workMetrics.noOfInvestigatedEvents.inc(consumerRecords.count().toDouble())
 
-        log.info { "Investigate batch start start map" }
-        log.info { "consumerRecords.first: ${consumerRecords.first()}" }
         val pTypes = consumerRecords.map {
-            log.info { "record: k: ${it.key()?.size} v: ${it.value()?.size} " }
             PersonBase.fromProto(it.key(), it.value()).also { pb ->
                 if (pb is PersonProtobufIssue)
                     log.error { "Investigate - Protobuf parsing issue for offset ${it.offset()} in partition ${it.partition()}" }
             }
         }
 
-        log.info { "Investigate Batch after pTypes - start" }
-        // consumerRecords.filter { PersonProto.PersonKey.parseFrom(it.key()).aktoerId == TARGET }.forEach {
-        //    log.info { "Investigate - found target in key" }
-        // }
+        consumerRecords.filter { PersonProto.PersonKey.parseFrom(it.key()).aktoerId == TARGET }.forEach {
+            log.info { "Investigate - found target in key" }
+        }
 
         if (pTypes.filterIsInstance<PersonProtobufIssue>().isNotEmpty()) {
             log.error { "Investigate - Protobuf issues - leaving kafka consumer loop" }
