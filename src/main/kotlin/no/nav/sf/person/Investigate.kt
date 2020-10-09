@@ -32,6 +32,7 @@ internal fun investigate(ws: WorkSettings) {
         workMetrics.noOfInvestigatedEvents.inc(consumerRecords.count().toDouble())
 
         val pTypes = consumerRecords.map {
+            log.info { "record: k: ${it.key()?.size} v: ${it.value()?.size} " }
             PersonBase.fromProto(it.key(), it.value()).also { pb ->
                 if (pb is PersonProtobufIssue)
                     log.error { "Investigate - Protobuf parsing issue for offset ${it.offset()} in partition ${it.partition()}" }
