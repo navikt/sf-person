@@ -2,7 +2,6 @@ package no.nav.sf.person
 
 import java.io.File
 import mu.KotlinLogging
-import no.nav.pdlsf.proto.PersonProto
 import no.nav.sf.library.AKafkaConsumer
 import no.nav.sf.library.AnEnvironment
 import no.nav.sf.library.KafkaConsumerStates
@@ -27,7 +26,7 @@ internal fun investigate(ws: WorkSettings) {
     workMetrics.noOfInvestigatedEvents.clear()
 
     kafkaConsumer.consume { consumerRecords ->
-        log.info { "Investigate Batch - start" }
+
         if (consumerRecords.isEmpty) return@consume KafkaConsumerStates.IsFinished.also { log.info { "Investigate finished - no more messages" } }
 
         workMetrics.noOfInvestigatedEvents.inc(consumerRecords.count().toDouble())
@@ -39,9 +38,10 @@ internal fun investigate(ws: WorkSettings) {
             }
         }
 
-        consumerRecords.filter { PersonProto.PersonKey.parseFrom(it.key()).aktoerId == TARGET }.forEach {
-            log.info { "Investigate - found target in key" }
-        }
+        log.info { "Investigate Batch after pTypes - start" }
+        // consumerRecords.filter { PersonProto.PersonKey.parseFrom(it.key()).aktoerId == TARGET }.forEach {
+        //    log.info { "Investigate - found target in key" }
+        // }
 
         if (pTypes.filterIsInstance<PersonProtobufIssue>().isNotEmpty()) {
             log.error { "Investigate - Protobuf issues - leaving kafka consumer loop" }
@@ -62,10 +62,6 @@ internal fun investigate(ws: WorkSettings) {
         persons.filter { it.aktoerId == TARGET }.forEach {
             log.info { "Investigate - found target as person" }
             msg += "\nFound as person:\n${it.toJson()}"
-        }
-
-        if (consumerRecords.any { PersonProto.PersonKey.parseFrom(it.key()).aktoerId == TARGET }) {
-            log.info { "Investigate - found target in key" }
         }
 
         log.info { "Investigate Batch - end" }
