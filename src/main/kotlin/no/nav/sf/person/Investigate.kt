@@ -27,10 +27,12 @@ internal fun investigate(ws: WorkSettings) {
 
     kafkaConsumer.consume { consumerRecords ->
 
-        if (consumerRecords.isEmpty) return@consume KafkaConsumerStates.IsFinished.also { log.info { "Investigate finished - no more messages" } }
+        if (consumerRecords.isEmpty) { return@consume KafkaConsumerStates.IsFinished.also { log.info { "Investigate finished - no more messages" } } }
 
+        log.info { "Investigate batch start - nO records ${consumerRecords.count()}" }
         workMetrics.noOfInvestigatedEvents.inc(consumerRecords.count().toDouble())
 
+        log.info { "Investigate batch start start map" }
         val pTypes = consumerRecords.map {
             log.info { "record: k: ${it.key()?.size} v: ${it.value()?.size} " }
             PersonBase.fromProto(it.key(), it.value()).also { pb ->
