@@ -16,6 +16,7 @@ val kafkaPersonEventTopic = AnEnvironment.getEnvOrDefault(EV_kafkaConsumerTopic,
 const val TARGET = "1000060614281"
 
 internal fun investigate(ws: WorkSettings) {
+    var result: MutableList<String> = mutableListOf()
     log.info { "Investigate - start" }
     val kafkaConsumer = AKafkaConsumer<ByteArray, ByteArray>(
             config = ws.kafkaConfigAlternative, // Separate clientId - do not affect offset of normal read
@@ -34,24 +35,46 @@ internal fun investigate(ws: WorkSettings) {
 
         workMetrics.noOfInvestigatedEvents.inc(consumerRecords.count().toDouble())
 
+        /*
         val pTypes = consumerRecords.map {
             PersonBase.fromProto(it.key(), it.value()).also { pb ->
                 if (pb is PersonProtobufIssue)
                     log.error { "Investigate - Protobuf parsing issue for offset ${it.offset()} in partition ${it.partition()}" }
             }
-        }
+        }*/
 
         consumerRecords.filter { PersonProto.PersonKey.parseFrom(it.key()).aktoerId == TARGET }.forEach {
             log.info { "Investigate - found target in key" }
+
+            val pType = PersonBase.fromProto(it.key(), it.value()).also { pb ->
+                    if (pb is PersonProtobufIssue)
+                        log.error { "Investigate - Protobuf parsing issue for offset ${it.offset()} in partition ${it.partition()}" }
+            }
+
+            if (pType is PersonProtobufIssue) {
+                log.error { "Investigate - Protobuf issues - leaving kafka consumer loop" }
+                workMetrics.consumerIssues.inc()
+                return@consume KafkaConsumerStates.HasIssues
+            }
+
+            if (pType is PersonTombstone) {
+                log.info { "Investigate - found tombstone" }
+                result.add("${it.offset()}: Tombstone")
+            }
+
+            if (pType is Person) {
+                log.info { "Investigate - found person" }
+                result.add("${it.offset()}:" + pType.toJson())
+            }
         }
 
+        /*
         if (pTypes.filterIsInstance<PersonProtobufIssue>().isNotEmpty()) {
             log.error { "Investigate - Protobuf issues - leaving kafka consumer loop" }
             workMetrics.consumerIssues.inc()
             return@consume KafkaConsumerStates.HasIssues
         }
 
-        val topic = kafkaConsumer.topics.first()
         val tombstones = pTypes.filterIsInstance<PersonTombstone>()
 
         tombstones.filter { it.aktoerId == TARGET }.forEach {
@@ -67,6 +90,8 @@ internal fun investigate(ws: WorkSettings) {
         }
 
         log.info { "Investigate Batch - end" }
+
+         */
         KafkaConsumerStates.IsOk
     }
 
