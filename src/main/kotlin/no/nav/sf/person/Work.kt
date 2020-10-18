@@ -112,6 +112,8 @@ internal fun work(ws: WorkSettings): Pair<WorkSettings, ExitReason> {
 
             val persons = pTypes.filterIsInstance<Person>()
 
+            persons.filter { it.aktoerId == TARGET }.forEach { log.info { "Posting a person message of target" } }
+
             val body = SFsObjectRest(
                     records = tombstones.map {
                         KafkaMessage(

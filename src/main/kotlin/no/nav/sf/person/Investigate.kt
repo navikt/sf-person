@@ -95,6 +95,7 @@ internal fun investigate(ws: WorkSettings) {
         KafkaConsumerStates.IsOk
     }
 
+    result.forEach { msg += "\n$it" }
     log.info { "Investigate - Attempt file storage" }
     File("/tmp/investigate").writeText("Result: $msg")
     log.info { "Investigate - File storage done" }
