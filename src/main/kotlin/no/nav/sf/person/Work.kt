@@ -81,7 +81,7 @@ internal fun work(ws: WorkSettings): Pair<WorkSettings, ExitReason> {
     ws.sfClient.enablesObjectPost { postActivities ->
 
         exitReason = ExitReason.NoKafkaClient
-        val kafkaConsumer = AKafkaConsumer<ByteArray, ByteArray>(
+        val kafkaConsumer = AKafkaConsumer<ByteArray, ByteArray?>(
                 config = ws.kafkaConfig,
                 fromBeginning = false
         )
@@ -112,7 +112,7 @@ internal fun work(ws: WorkSettings): Pair<WorkSettings, ExitReason> {
 
             val persons = pTypes.filterIsInstance<Person>()
 
-            persons.filter { it.aktoerId == TARGET }.forEach { log.info { "Posting a person message of target" } }
+            log.info { "Posting ${tombstones.size} tombstones and ${persons.size} person objects to sf" }
 
             val body = SFsObjectRest(
                     records = tombstones.map {

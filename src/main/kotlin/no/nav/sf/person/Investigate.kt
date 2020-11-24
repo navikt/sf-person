@@ -2,7 +2,6 @@ package no.nav.sf.person
 
 import java.io.File
 import mu.KotlinLogging
-import no.nav.pdlsf.proto.PersonProto
 import no.nav.sf.library.AKafkaConsumer
 import no.nav.sf.library.AnEnvironment
 import no.nav.sf.library.KafkaConsumerStates
@@ -13,7 +12,7 @@ private val log = KotlinLogging.logger {}
 const val EV_kafkaConsumerTopic = "KAFKA_TOPIC"
 val kafkaPersonEventTopic = AnEnvironment.getEnvOrDefault(EV_kafkaConsumerTopic, "$PROGNAME-consumer")
 
-const val TARGET = "1000060614281"
+val TARGET = listOf("1000006688434", "1000009679611")
 
 internal fun investigate(ws: WorkSettings) {
     var result: MutableList<String> = mutableListOf()
@@ -42,8 +41,9 @@ internal fun investigate(ws: WorkSettings) {
                     log.error { "Investigate - Protobuf parsing issue for offset ${it.offset()} in partition ${it.partition()}" }
             }
         }*/
-
-        consumerRecords.filter { PersonProto.PersonKey.parseFrom(it.key()).aktoerId == TARGET }.forEach {
+        // filter { TARGET.contains(PersonProto.PersonKey.parseFrom(it.key()).aktoerId) }
+        /*
+        consumerRecords.forEach {
             log.info { "Investigate - found target in key" }
 
             val pType = PersonBase.fromProto(it.key(), it.value()).also { pb ->
@@ -66,7 +66,7 @@ internal fun investigate(ws: WorkSettings) {
                 log.info { "Investigate - found person" }
                 result.add("${it.offset()}:" + pType.toJson())
             }
-        }
+        }*/
 
         /*
         if (pTypes.filterIsInstance<PersonProtobufIssue>().isNotEmpty()) {
